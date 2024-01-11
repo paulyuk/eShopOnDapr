@@ -7,6 +7,11 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    healthcheck:
+      test: [ "CMD", "rabbitmqctl", "status"]
+      interval: 1s
+      timeout: 2s
+      retries: 20
 
   redis:
     image: redis:alpine
@@ -34,7 +39,10 @@ services:
     image: "ghcr.io/dapr/dapr:1.12.0"
     network_mode: "service:basket-api"
     depends_on:
-      - basket-api
+      basket-api:
+        condition: service_started
+      rabbitmq: 
+        condition: service_healthy
 
   blazor-client:
     image: ${REGISTRY:-eshopdapr}/blazor.client:${TAG:-latest}
@@ -54,7 +62,10 @@ services:
     image: "ghcr.io/dapr/dapr:1.12.0"
     network_mode: "service:catalog-api"
     depends_on:
-      - catalog-api
+      catalog-api:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   identity-api:
     image: ${REGISTRY:-eshopdapr}/identity.api:${TAG:-latest}
@@ -82,7 +93,10 @@ services:
     image: "ghcr.io/dapr/dapr:1.12.0"
     network_mode: "service:ordering-api"
     depends_on:
-      - ordering-api
+      ordering-api:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   payment-api:
     image: ${REGISTRY:-eshopdapr}/payment.api:${TAG:-latest}
@@ -94,7 +108,10 @@ services:
     image: "ghcr.io/dapr/dapr:1.12.0"
     network_mode: "service:payment-api"
     depends_on:
-      - payment-api
+      payment-api:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   webshoppingagg:
     image: ${REGISTRY:-eshopdapr}/webshoppingagg:${TAG:-latest}
@@ -112,7 +129,10 @@ services:
     image: "ghcr.io/dapr/dapr:1.12.0"
     network_mode: "service:webshoppingagg"
     depends_on:
-      - webshoppingagg
+      webshoppingagg:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   webshoppingapigw:
     image: ${REGISTRY:-eshopdapr}/webshoppingapigw:${TAG:-latest}

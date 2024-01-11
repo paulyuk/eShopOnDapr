@@ -4,15 +4,11 @@ metadata:
   name: eshopondapr-statestore
   namespace: eshop
 spec:
-  type: state.redis
+  type: state.sqlite
   version: v1
   metadata:
-  - name: redisHost
-    value: redis:6379
-  - name: redisPassword
-    secretKeyRef:
-      name: State.RedisPassword
-      key: State.RedisPassword
+  - name: connectionString
+    value: "/data/data.db"
   - name: actorStateStore
     value: "true"
 auth:

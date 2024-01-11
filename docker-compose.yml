@@ -2,19 +2,29 @@ version: '3.4'
 
 services:
 
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8080:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
   maildev:
     image: maildev/maildev:latest
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
     healthcheck:
-      test: [ "CMD", "rabbitmqctl", "status"]
-      interval: 1s
-      timeout: 2s
-      retries: 20
-
-  redis:
-    image: redis:alpine
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 30s
+      timeout: 5s
+      retries: 10
 
   seq:
     image: datalust/seq:latest
@@ -28,19 +38,31 @@ services:
 
   basket-api:
     image: ${REGISTRY:-eshopdapr}/basket.api:${TAG:-latest}
+    restart: always
     build:
       context: .
       dockerfile: src/Services/Basket/Basket.API/Dockerfile
     depends_on:
       - identity-api
-      - redis
 
   basket-api-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:basket-api"
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command:
+      - "/daprd"
+      - "-app-id"
+      - "basket-api"
+      - "-app-port"
+      - "80"
+      - "-resources-path"
+      - "/components"
+      - "-config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
+      - "./data:/data"
     depends_on:
-      basket-api:
-        condition: service_started
       rabbitmq: 
         condition: service_healthy
 
@@ -52,6 +74,8 @@ services:
 
   catalog-api:
     image: ${REGISTRY:-eshopdapr}/catalog.api:${TAG:-latest}
+    restart: always
+    network_mode: "service:catalog-api-dapr"
     build:
       context: .
       dockerfile: src/Services/Catalog/Catalog.API/Dockerfile
@@ -59,16 +83,29 @@ services:
       - sqldata
 
   catalog-api-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:catalog-api"
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    command:
+      - "/daprd"
+      - "-app-id"
+      - "catalog-api"
+      - "-app-port"
+      - "80"
+      - "-resources-path"
+      - "/components"
+      - "-config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
+    restart: always
     depends_on:
-      catalog-api:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
 
   identity-api:
     image: ${REGISTRY:-eshopdapr}/identity.api:${TAG:-latest}
+    restart: always
+    network_mode: "service:identity-api-dapr"
     build:
       context: .
       dockerfile: src/Services/Identity/Identity.API/Dockerfile
@@ -76,13 +113,28 @@ services:
       - sqldata
 
   identity-api-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:identity-api"
-    depends_on:
-      - identity-api
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command: 
+      - "/daprd"
+      - "--app-id"
+      - "identity-api"
+      - "--app-port"
+      - "80"
+      - "--placement-host-address"
+      - "dapr-placement:50000"
+      - "--resources-path"
+      - "/components"
+      - "--config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
 
   ordering-api:
     image: ${REGISTRY:-eshopdapr}/ordering.api:${TAG:-latest}
+    restart: always
+    network_mode: "service:ordering-api-dapr"
     build:
       context: .
       dockerfile: src/Services/Ordering/Ordering.API/Dockerfile
@@ -90,31 +142,62 @@ services:
       - sqldata
 
   ordering-api-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:ordering-api"
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command:
+      - "/daprd"
+      - "--app-id"
+      - "ordering-api"
+      - "--app-port"
+      - "80"
+      - "--log-level"
+      - "debug"
+      - "--placement-host-address"
+      - "dapr-placement:50000"
+      - "--resources-path"
+      - "/components"
+      - "--config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./data:/data"
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
     depends_on:
-      ordering-api:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
 
   payment-api:
     image: ${REGISTRY:-eshopdapr}/payment.api:${TAG:-latest}
+    restart: always
+    network_mode: "service:payment-api-dapr"
     build:
       context: .
       dockerfile: src/Services/Payment/Payment.API/Dockerfile
 
   payment-api-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:payment-api"
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command: 
+      - "/daprd"
+      - "--app-id"
+      - "payment-api"
+      - "--app-port"
+      - "80"
+      - "--resources-path"
+      - "/components"
+      - "--config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
     depends_on:
-      payment-api:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
 
   webshoppingagg:
     image: ${REGISTRY:-eshopdapr}/webshoppingagg:${TAG:-latest}
+    restart: always
+    network_mode: "service:webshoppingagg-dapr"
     build:
       context: .
       dockerfile: src/ApiGateways/Aggregators/Web.Shopping.HttpAggregator/Dockerfile
@@ -126,25 +209,49 @@ services:
       - sqldata
 
   webshoppingagg-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:webshoppingagg"
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command:
+      - "/daprd"
+      - "--app-id"
+      - "webshoppingagg"
+      - "--app-port"
+      - "80"
+      - "--resources-path"
+      - "/components"
+      - "--config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
     depends_on:
-      webshoppingagg:
-        condition: service_started
       rabbitmq:
         condition: service_healthy
 
   webshoppingapigw:
     image: ${REGISTRY:-eshopdapr}/webshoppingapigw:${TAG:-latest}
+    restart: always
+    network_mode: "service:webshoppingapigw-dapr"
     build:
       context: .
       dockerfile: src/ApiGateways/Envoy/Dockerfile
 
   webshoppingapigw-dapr:
-    image: "ghcr.io/dapr/dapr:1.12.0"
-    network_mode: "service:webshoppingapigw"
-    depends_on:
-      - webshoppingapigw
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command: 
+      - "/daprd"
+      - "--app-id"
+      - "webshoppingapigw"
+      - "--app-port"
+      - "80"
+      - "--resources-path"
+      - "/components"
+      - "--config"
+      - "/configuration/eshop-config.yaml"
+    volumes:
+      - "./dapr/components/:/components"
+      - "./dapr/configuration/:/configuration"
 
   webstatus:
     image: ${REGISTRY:-eshopdapr}/webstatus:${TAG:-latest}
@@ -153,4 +260,21 @@ services:
       dockerfile: src/Web/WebStatus/Dockerfile
 
   dapr-placement:
-    image: "ghcr.io/dapr/dapr:1.12.0"
+    image: "ghcr.io/dapr/dapr:1.12.3"
+    restart: always
+    command: 
+      - "/placement"
+      - "--port"
+      - "50000"
+      - "--log-level"
+      - "debug"
+    ports:
+      - "50000:50000"
+
+volumes:
+  eshop-sqldata:
+    external: false
+  eshop-nosqldata:
+    external: false
+  eshop-basketdata:
+    external: false
